@@ -6,7 +6,7 @@ use crate::os_config::*;
 use crate::systick::{SysTick};
 use cortex_m::interrupt;
 
-pub const CORE_CLOCK_MHZ: u32 = 16; // HSI default; adjust to 168 if PLL used
+pub const CORE_CLOCK_MHZ: u32 = 16; 
 
 /// Addresses for System Control Block ICSR register (PendSV set-pending bit)
 const SCB_ICSR: *mut u32 = 0xE000_ED04 as *mut u32;
@@ -53,9 +53,8 @@ pub extern "C" fn update_to_next_task() {
 
 /// Trigger a PendSV to request a context switch.
 pub fn schedule() {
-    unsafe {       
-        let val = read_volatile(SCB_ICSR);
-        write_volatile(SCB_ICSR, val | (1 << 28)); // Set PENDSVSET bit
+    unsafe {
+        core::ptr::write_volatile(SCB_ICSR, 1 << 28);
     }
 }
 
@@ -120,33 +119,33 @@ pub fn scheduler_init() {
     unsafe {
         init_scheduler_stack(scheduler_stack_start());
 
-        // Set PendSV to lowest priority (0xFF)
-        let shpr2 = 0xE000_ED20 as *mut u32;
-        let val = read_volatile(shpr2);
-        write_volatile(shpr2, (val & !(0xFFu32 << 24)) | (0xFFu32 << 24));
+        // SHPR3 base
+        let shpr3 = 0xE000_ED20 as *mut u32;
 
-        // Set SysTick to high priority (0x00)
-        let shpr3 = 0xE000_ED24 as *mut u32;
-        let val = read_volatile(shpr3);
-        write_volatile(shpr3, (val & !(0xFFu32 << 24)) | (0x00u32 << 24));
+        // Clear both fields (PendSV [23:16], SysTick [31:24]) then set:
+        //   PendSV  = 0xFF (lowest)
+        //   SysTick = 0xF0 (low, but above PendSV)
+        let mut v = core::ptr::read_volatile(shpr3);
+        v &= !((0xFFu32 << 16) | (0xFFu32 << 24)); // clear PendSV & SysTick fields
+        v |= (0xFFu32 << 16) | (0xF0u32 << 24);    // set PendSV, SysTick
+        core::ptr::write_volatile(shpr3, v);
 
-        // Disable lazy FPU stacking
+        // (Optional) byte-wise form—often clearer:
+        // *(0xE000_ED22 as *mut u8) = 0xFF; // PendSV
+        // *(0xE000_ED23 as *mut u8) = 0xF0; // SysTick
+
+        // If you keep FP enabled, this disables lazy stacking (ASPEN=1, LSPEN=0).
         let fpccr = 0xE000_EF34 as *mut u32;
-        let val = read_volatile(fpccr);
-        write_volatile(fpccr, (val | (1 << 31)) & !(1 << 30));
+        let vv = core::ptr::read_volatile(fpccr);
+        core::ptr::write_volatile(fpccr, (vv | (1 << 31)) & !(1 << 30));
 
         let mut systick = SysTick::take().expect("Failed to take SysTick instance!");
         init_task_stack();
         systick.init_systic_interrupt_ms(KERNEL_TICK_PERIOD_MS, CORE_CLOCK_MHZ);
 
-        update_to_next_task(); // Sets CURRENT_TASK_IDX to 1 (task 1)
+        update_to_next_task();
         switch_sp_to_psp();
         let entry = TASKS[CURRENT_TASK_IDX].task_handler;
         (entry)();
     }
 }
-
-// #[exception]
-// fn HardFault(ef: &ExceptionFrame) -> ! {
-//     loop {} // Debug: inspect ef in debugger
-// }

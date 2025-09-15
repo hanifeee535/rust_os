@@ -53,13 +53,14 @@ pub const SRAM_END: u32 = SRAM_START + SRAM_SIZE;
 /// Compute top-of-stack for task `i` (0..MAX_TASK-1). Full descending stack.
 #[inline(always)]
 pub const fn task_stack_start(i: usize) -> u32 {
-    SRAM_END - (i as u32 * SIZE_TASK_STACK)
+    let addr = SRAM_END - (i as u32 * SIZE_TASK_STACK);
+    addr & !0x7 // force 8-byte alignment
 }
 
-/// Scheduler stack start (MSP) below task stacks
 #[inline(always)]
 pub const fn scheduler_stack_start() -> u32 {
-    SRAM_END - (MAX_TASK as u32 * SIZE_TASK_STACK)
+    let addr = SRAM_END - (MAX_TASK as u32 * SIZE_TASK_STACK);
+    addr & !0x7 // force 8-byte alignment
 }
 
 /// Task states
