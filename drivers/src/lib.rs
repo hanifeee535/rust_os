@@ -1,14 +1,9 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+#![cfg_attr(not(test), no_main)]
+#![no_std]
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub mod gpio;
+pub mod stm32f407_registers;
+pub mod exti;
+pub mod cortex_m4;
+pub mod read_write;

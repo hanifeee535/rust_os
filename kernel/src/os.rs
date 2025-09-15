@@ -2,8 +2,8 @@
 
 use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::{exception};
-use crate::scheduler_config::*;
-use drivers::systick::{SysTick};
+use crate::os_config::*;
+use crate::systick::{SysTick};
 use cortex_m::interrupt;
 
 pub const CORE_CLOCK_MHZ: u32 = 16; // HSI default; adjust to 168 if PLL used
