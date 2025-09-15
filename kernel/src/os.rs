@@ -36,20 +36,49 @@ pub extern "C" fn save_psp_value(psp: u32) {
     });
 }
 
+// SAFETY: called from PendSV assembly; symbol must be unmangled and C ABI.
 #[unsafe(no_mangle)]
 pub extern "C" fn update_to_next_task() {
     unsafe {
-        for _ in 0..MAX_TASK {
-            // Move to next task index
-            CURRENT_TASK_IDX = (CURRENT_TASK_IDX + 1) % MAX_TASK;
+        let n = MAX_TASK;
+        let mut next: usize = 0;        // idle fallback
+        let mut best: usize = usize::MAX;
 
-            // Check if READY
-            if TASKS[CURRENT_TASK_IDX].current_state == TASK_READY_STATE {
-                break;
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => {
+                let mut i = (CURRENT_TASK_IDX + 1) % n;
+                for _ in 0..n {
+                    if TASKS[i].current_state == TASK_READY_STATE {
+                        next = i;
+                        break;
+                    }
+                    i = (i + 1) % n;
+                }
+            }
+
+            SchedulerMode::Priority => {
+                let mut i = (CURRENT_TASK_IDX + 1) % n;
+                for _ in 0..n {
+                    if TASKS[i].current_state == TASK_READY_STATE {
+                        let p = TASKS[i].priority as usize;
+                        if p < best {
+                            best = p;
+                            next = i;
+                            // once we pick a new best, we stick with the first one we see
+                        }
+                    }
+                    i = (i + 1) % n;
+                }
             }
         }
+
+        CURRENT_TASK_IDX = next;
     }
 }
+
+
+
+
 
 /// Trigger a PendSV to request a context switch.
 pub fn schedule() {

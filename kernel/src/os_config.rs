@@ -43,12 +43,14 @@ pub const SRAM_START: u32 = 0x2000_0000;
 pub const SRAM_SIZE: u32 = 128 * 1024; // 128 KB
 pub const SRAM_END: u32 = SRAM_START + SRAM_SIZE;
 
-// // Total stack usage for compile-time check
-// pub const TOTAL_STACK_USAGE: u32 = (MAX_TASK as u32 * SIZE_TASK_STACK) + SIZE_SCHEDULER_STACK;
 
-// // /// Compile-time check: ensure all stacks fit into SRAM.
-// // /// If TOTAL_STACK_USAGE > SRAM_SIZE, the subtraction underflows and this fails to compile.
-// // const _: [u8; (SRAM_SIZE - TOTAL_STACK_USAGE) as usize + 1] = [0u8; 1];
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum SchedulerMode {
+    RoundRobin,
+    Priority,
+}
+
+pub const SCHEDULER_MODE: SchedulerMode = SchedulerMode::Priority;
 
 /// Compute top-of-stack for task `i` (0..MAX_TASK-1). Full descending stack.
 #[inline(always)]
@@ -79,7 +81,7 @@ pub type TaskHandler = unsafe extern "C" fn();
 #[derive(Copy,Clone)]
 pub struct Tcb {
     pub psp_value: u32,     // Process Stack Pointer for the task
-    pub priority: u8,       // Higher number => higher priority
+    pub priority: usize,       // Higher number => higher priority
     pub current_state: u8,  // TASK_READY_STATE or TASK_BLOCKED_STATE
     pub block_count: u8,    // blocking counter (if used)
     pub task_handler: TaskHandler,
@@ -101,8 +103,8 @@ unsafe extern "C" {
 /// Static array of all TCBS for tasks.
 /// Initialize stacks and other fields at runtime during scheduler init.
 pub static mut TASKS: [Tcb; MAX_TASK] = [
-    Tcb { psp_value: 0, priority: 0, current_state: TASK_READY_STATE, block_count: 0, task_handler: Idle_task_handler },
+    Tcb { psp_value: 0, priority: 0, current_state: TASK_BLOCKED_STATE, block_count: 0, task_handler: Idle_task_handler },
     Tcb { psp_value: 0, priority: 3, current_state: TASK_READY_STATE, block_count: 0, task_handler: task1_handler },
     Tcb { psp_value: 0, priority: 3, current_state: TASK_READY_STATE, block_count: 0, task_handler: task2_handler },
-    Tcb { psp_value: 0, priority: 4, current_state: TASK_READY_STATE, block_count: 0, task_handler: task3_handler },
+    Tcb { psp_value: 0, priority: 2, current_state: TASK_READY_STATE, block_count: 0, task_handler: task3_handler },
    ];
