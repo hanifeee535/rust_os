@@ -19,21 +19,21 @@ unsafe extern "C" {
 }
 
 /// Current task index and global tick (static mut; accessed under critical sections)
-static mut CURRENT_TASK_IDX: usize = 0;
+static mut CURRENT_TASK_IDX: usize = 1;
 static mut GLOBAL_TICK_COUNT: u32 = 0;
 
 // ---------- Low-level helpers (called from assembly) ----------
 
 #[unsafe(no_mangle)]
 pub extern "C" fn get_psp_value() -> u32 {
-    interrupt::free(|_| unsafe { TASKS[CURRENT_TASK_IDX].psp_value })
+     unsafe { TASKS[CURRENT_TASK_IDX].psp_value }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn save_psp_value(psp: u32) {
-    interrupt::free(|_| unsafe {
+     unsafe {
         TASKS[CURRENT_TASK_IDX].psp_value = psp;
-    });
+    };
 }
 
 // SAFETY: called from PendSV assembly; symbol must be unmangled and C ABI.
@@ -41,40 +41,31 @@ pub extern "C" fn save_psp_value(psp: u32) {
 pub extern "C" fn update_to_next_task() {
     unsafe {
         let n = MAX_TASK;
-        let mut next: usize = 0;        // idle fallback
-        let mut best: usize = usize::MAX;
+        let cur = CURRENT_TASK_IDX;
 
-        match SCHEDULER_MODE {
-            SchedulerMode::RoundRobin => {
-                let mut i = (CURRENT_TASK_IDX + 1) % n;
-                for _ in 0..n {
-                    if TASKS[i].current_state == TASK_READY_STATE {
-                        next = i;
-                        break;
-                    }
-                    i = (i + 1) % n;
+        let mut next: usize = 0;          // fallback: idle
+        let mut best: usize = usize::MAX; // track best (lowest) priority seen
+
+        // single pass: find the first READY task after `cur` with the lowest priority
+        let mut i = (cur + 1) % n;
+        for _ in 0..n-1 {                  // scan at most n-1 non-idle slots
+            if i != 0 && TASKS[i].current_state == TASK_READY_STATE {
+                let p = TASKS[i].priority as usize;
+                if p < best {
+                    best = p;
+                    next = i;              // pick first seen with current best prio
+                    // don't break: there might be an even higher priority later
                 }
             }
-
-            SchedulerMode::Priority => {
-                let mut i = (CURRENT_TASK_IDX + 1) % n;
-                for _ in 0..n {
-                    if TASKS[i].current_state == TASK_READY_STATE {
-                        let p = TASKS[i].priority as usize;
-                        if p < best {
-                            best = p;
-                            next = i;
-                            // once we pick a new best, we stick with the first one we see
-                        }
-                    }
-                    i = (i + 1) % n;
-                }
-            }
+            i = (i + 1) % n;
         }
 
-        CURRENT_TASK_IDX = next;
+        CURRENT_TASK_IDX = next;           // commit once
     }
 }
+
+
+
 
 
 
@@ -87,10 +78,26 @@ pub fn schedule() {
     }
 }
 
+
 #[exception]
-fn SysTick() {    
+fn SysTick() {
+    unsafe {
+        GLOBAL_TICK_COUNT = GLOBAL_TICK_COUNT.wrapping_add(1);
+
+        // for i in 0..MAX_TASK {
+        //     if TASKS[i].current_state == TASK_BLOCKED_STATE {
+        //         // Wake when now >= wake_tick (stored in block_count)
+        //         if (GLOBAL_TICK_COUNT.wrapping_sub(TASKS[i].block_count) as i32) >= 0 {
+        //             TASKS[i].current_state = TASK_READY_STATE;
+        //         }
+        //     }
+        // }
+    }
     schedule();
 }
+
+
+
 
 #[exception]
 fn PendSV() {
@@ -124,7 +131,7 @@ unsafe fn init_task_stack() {
 
             // LR = return to Thread mode using PSP
             p = p.offset(-1);
-            p.write_volatile(0xFFFFFFF9u32); // Thread mode, PSP, no FPU
+            p.write_volatile(0xFFFFFFFDu32); // Thread mode, PSP, no FPU
 
             // R12, R3, R2, R1, R0
             for _ in 0..5 {
@@ -167,12 +174,12 @@ pub fn scheduler_init() {
         let fpccr = 0xE000_EF34 as *mut u32;
         let vv = core::ptr::read_volatile(fpccr);
         core::ptr::write_volatile(fpccr, (vv | (1 << 31)) & !(1 << 30));
-
+         init_task_stack();
         let mut systick = SysTick::take().expect("Failed to take SysTick instance!");
-        init_task_stack();
+       
         systick.init_systic_interrupt_ms(KERNEL_TICK_PERIOD_MS, CORE_CLOCK_MHZ);
 
-        update_to_next_task();
+        //update_to_next_task();
         switch_sp_to_psp();
         let entry = TASKS[CURRENT_TASK_IDX].task_handler;
         (entry)();

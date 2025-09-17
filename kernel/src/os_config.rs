@@ -50,7 +50,7 @@ pub enum SchedulerMode {
     Priority,
 }
 
-pub const SCHEDULER_MODE: SchedulerMode = SchedulerMode::Priority;
+pub const SCHEDULER_MODE: SchedulerMode = SchedulerMode::RoundRobin;
 
 /// Compute top-of-stack for task `i` (0..MAX_TASK-1). Full descending stack.
 #[inline(always)]
@@ -81,9 +81,9 @@ pub type TaskHandler = unsafe extern "C" fn();
 #[derive(Copy,Clone)]
 pub struct Tcb {
     pub psp_value: u32,     // Process Stack Pointer for the task
-    pub priority: usize,       // Higher number => higher priority
+    pub priority: usize,       // Smaller number => higher priority
     pub current_state: u8,  // TASK_READY_STATE or TASK_BLOCKED_STATE
-    pub block_count: u8,    // blocking counter (if used)
+    pub block_count: u32,   // blocking counter (if used)
     pub task_handler: TaskHandler,
 }
 
@@ -103,8 +103,8 @@ unsafe extern "C" {
 /// Static array of all TCBS for tasks.
 /// Initialize stacks and other fields at runtime during scheduler init.
 pub static mut TASKS: [Tcb; MAX_TASK] = [
-    Tcb { psp_value: 0, priority: 0, current_state: TASK_BLOCKED_STATE, block_count: 0, task_handler: Idle_task_handler },
-    Tcb { psp_value: 0, priority: 3, current_state: TASK_READY_STATE, block_count: 0, task_handler: task1_handler },
-    Tcb { psp_value: 0, priority: 3, current_state: TASK_READY_STATE, block_count: 0, task_handler: task2_handler },
-    Tcb { psp_value: 0, priority: 2, current_state: TASK_READY_STATE, block_count: 0, task_handler: task3_handler },
+    Tcb { psp_value: 0, priority: 0, current_state: TASK_READY_STATE,   block_count: 0, task_handler: Idle_task_handler },
+    Tcb { psp_value: 0, priority: 2, current_state: TASK_READY_STATE,   block_count: 0, task_handler: task1_handler },
+    Tcb { psp_value: 0, priority: 2, current_state: TASK_READY_STATE , block_count: 0, task_handler: task2_handler },
+    Tcb { psp_value: 0, priority: 1, current_state: TASK_BLOCKED_STATE, block_count: 0, task_handler: task3_handler },
    ];
