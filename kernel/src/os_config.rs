@@ -44,13 +44,7 @@ pub const SRAM_SIZE: u32 = 128 * 1024; // 128 KB
 pub const SRAM_END: u32 = SRAM_START + SRAM_SIZE;
 
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum SchedulerMode {
-    RoundRobin,
-    Priority,
-}
 
-pub const SCHEDULER_MODE: SchedulerMode = SchedulerMode::RoundRobin;
 
 /// Compute top-of-stack for task `i` (0..MAX_TASK-1). Full descending stack.
 #[inline(always)]
@@ -104,7 +98,7 @@ unsafe extern "C" {
 /// Initialize stacks and other fields at runtime during scheduler init.
 pub static mut TASKS: [Tcb; MAX_TASK] = [
     Tcb { psp_value: 0, priority: 0, current_state: TASK_READY_STATE,   block_count: 0, task_handler: Idle_task_handler },
-    Tcb { psp_value: 0, priority: 2, current_state: TASK_READY_STATE,   block_count: 0, task_handler: task1_handler },
-    Tcb { psp_value: 0, priority: 2, current_state: TASK_READY_STATE , block_count: 0, task_handler: task2_handler },
-    Tcb { psp_value: 0, priority: 1, current_state: TASK_BLOCKED_STATE, block_count: 0, task_handler: task3_handler },
+    Tcb { psp_value: 0, priority: 1, current_state: TASK_BLOCKED_STATE,   block_count: 0, task_handler: task1_handler },
+    Tcb { psp_value: 0, priority: 2, current_state: TASK_BLOCKED_STATE,   block_count: 0, task_handler: task2_handler },
+    Tcb { psp_value: 0, priority: 2, current_state: TASK_BLOCKED_STATE,   block_count: 0, task_handler: task3_handler },
    ];

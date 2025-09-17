@@ -19,7 +19,7 @@ unsafe extern "C" {
 }
 
 /// Current task index and global tick (static mut; accessed under critical sections)
-static mut CURRENT_TASK_IDX: usize = 1;
+static mut CURRENT_TASK_IDX: usize = 0;
 static mut GLOBAL_TICK_COUNT: u32 = 0;
 
 // ---------- Low-level helpers (called from assembly) ----------
@@ -46,23 +46,25 @@ pub extern "C" fn update_to_next_task() {
         let mut next: usize = 0;          // fallback: idle
         let mut best: usize = usize::MAX; // track best (lowest) priority seen
 
-        // single pass: find the first READY task after `cur` with the lowest priority
-        let mut i = (cur + 1) % n;
-        for _ in 0..n-1 {                  // scan at most n-1 non-idle slots
-            if i != 0 && TASKS[i].current_state == TASK_READY_STATE {
+        // start after current, but only in range [1..n-1]
+        let mut i = ((cur + 1 - 1) % (n - 1)) + 1;
+
+        for _ in 0..n-1 {   // only user tasks
+            if TASKS[i].current_state == TASK_READY_STATE {
                 let p = TASKS[i].priority as usize;
                 if p < best {
                     best = p;
-                    next = i;              // pick first seen with current best prio
-                    // don't break: there might be an even higher priority later
+                    next = i;
                 }
             }
-            i = (i + 1) % n;
+            // strictly cycle inside 1..n-1
+            i = ((i - 1 + 1) % (n - 1)) + 1;
         }
 
-        CURRENT_TASK_IDX = next;           // commit once
+        CURRENT_TASK_IDX = next; // commit once
     }
 }
+
 
 
 
